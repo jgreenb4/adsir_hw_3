@@ -208,8 +208,9 @@ rf_explain <-
     label = "rf"
   )
 ```
+# PP Plot
 
-# Random Observation #1
+## Random Observation #1
 
 ```{r message = FALSE, warning = FALSE}
 
@@ -231,7 +232,7 @@ plot(pp_lasso_1)
 pp_lasso_1
 ```
 
-# Random Observation #2
+## Random Observation #2
 
 ```{r message = FALSE, warning = FALSE}
 # Choose an observation
@@ -252,7 +253,7 @@ plot(pp_lasso_2)
 pp_lasso_2
 ```
 
-# Random Observation #3
+## Random Observation #3
 
 ```{r message = FALSE, warning = FALSE}
 # Choose an observation
@@ -272,3 +273,42 @@ plot(pp_lasso_3)
 # Table form of break-down plot data
 pp_lasso_3
 ```
+
+# SHAP
+
+# Observation 1
+
+```{r}
+rf_shap <-predict_parts(explainer = rf_explain,
+                        new_observation = new_obs_1,
+                        type = "shap",
+                        B = 10 #number of reorderings - start small
+)
+
+plot(rf_shap)
+```
+
+# Observation 2
+
+```{r}
+rf_shap <-predict_parts(explainer = rf_explain,
+                        new_observation = new_obs_2,
+                        type = "shap",
+                        B = 10 #number of reorderings - start small
+)
+
+plot(rf_shap)
+```
+
+# Observation 3
+
+```{r}
+rf_shap <-predict_parts(explainer = rf_explain,
+                        new_observation = new_obs_3,
+                        type = "shap",
+                        B = 10 #number of reorderings - start small
+)
+
+plot(rf_shap)
+```
+
