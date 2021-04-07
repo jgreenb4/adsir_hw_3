@@ -9,3 +9,266 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+```{r}
+# SEE modeldata package for new datasets
+library(tidyverse)         # for graphing and data cleaning
+library(tidymodels)        # for modeling
+library(stacks)            # for stacking models
+library(naniar)            # for examining missing values (NAs)
+library(lubridate)         # for date manipulation
+library(moderndive)        # for King County housing data
+library(DALEX)             # for model interpretation  
+library(DALEXtra)          # for extension of DALEX
+library(patchwork)         # for combining plots nicely
+library(dbplyr)            # for SQL query "cheating" - part of tidyverse but needs to be loaded separately
+library(mdsr)              # for accessing some databases - goes with Modern Data Science with R textbook
+library(RMySQL)            # for accessing MySQL databases
+library(RSQLite)           # for accessing SQLite databases
+
+#mapping
+library(maps)              # for built-in maps
+library(sf)                # for making maps using geom_sf
+library(ggthemes)          # Lisa added - I like theme_map() for maps :)
+
+#tidytext
+library(tidytext)          # for text analysis, the tidy way!
+library(textdata)          
+library(reshape2)
+library(wordcloud)         # for wordcloud
+library(stopwords)
+
+theme_set(theme_minimal()) # Lisa's favorite theme
+```
+
+# Local Interpretable Machine Learning
+
+You are going to use the King County house data and the same random forest model to predict log_price that I used in the tutorial.
+
+Tasks:
+
+Choose 3 new observations and do the following for each observation:
+-Construct a break-down plot using the default ordering. Interpret the resulting graph. Which variables contribute most to each observation’s prediction?
+    
+    Construct a SHAP graph and interpret it. Does it tell a similar story to the break-down plot?
+    Construct a LIME graph (follow my code carefully). How close is each original prediction to the prediction from the local model? Interpret the result. You can also try using fewer or more variables in the local model than I used in the example.
+
+    Describe how you would use the interpretable machine learning tools we’ve learned (both local and global) in future machine learning projects? How does each of them help you?
+
+```{r}
+data("house_prices")
+
+# Create log_price and drop price variable
+house_prices <- house_prices %>% 
+  mutate(log_price = log(price, base = 10)) %>% 
+  # make all integers numeric ... fixes prediction problem
+  mutate(across(where(is.integer), as.numeric)) %>% 
+  select(-price)
+```
+
+```{r}
+set.seed(327) #for reproducibility
+
+# Randomly assigns 75% of the data to training.
+house_split <- initial_split(house_prices, 
+                             prop = .75)
+house_training <- training(house_split)
+house_testing <- testing(house_split)
+
+# lasso recipe and transformation steps
+house_recipe <- recipe(log_price ~ ., 
+                       data = house_training) %>% 
+  step_rm(sqft_living15, sqft_lot15) %>%
+  step_log(starts_with("sqft"),
+           -sqft_basement, 
+           base = 10) %>% 
+  step_mutate(grade = as.character(grade),
+              grade = fct_relevel(
+                        case_when(
+                          grade %in% "1":"6"   ~ "below_average",
+                          grade %in% "10":"13" ~ "high",
+                          TRUE ~ grade
+                        ),
+                        "below_average","7","8","9","high"),
+              basement = as.numeric(sqft_basement == 0),
+              renovated = as.numeric(yr_renovated == 0),
+              view = as.numeric(view == 0),
+              waterfront = as.numeric(waterfront),
+              age_at_sale = year(date) - yr_built)%>% 
+  step_rm(sqft_basement, 
+          yr_renovated, 
+          yr_built) %>% 
+  step_date(date, 
+            features = "month") %>% 
+  update_role(all_of(c("id",
+                       "date",
+                       "zipcode", 
+                       "lat", 
+                       "long")),
+              new_role = "evaluative") %>% 
+  step_dummy(all_nominal(), 
+             -all_outcomes(), 
+             -has_role(match = "evaluative")) %>% 
+  step_normalize(all_predictors(), 
+                 -all_nominal())
+
+#define lasso model
+house_lasso_mod <- 
+  linear_reg(mixture = 1) %>% 
+  set_engine("glmnet") %>% 
+  set_args(penalty = tune()) %>% 
+  set_mode("regression")
+
+# create workflow
+house_lasso_wf <- 
+  workflow() %>% 
+  add_recipe(house_recipe) %>% 
+  add_model(house_lasso_mod)
+
+# create cv samples
+set.seed(1211) # for reproducibility
+house_cv <- vfold_cv(house_training, v = 5)
+
+
+# penalty grid - changed to 10 levels
+penalty_grid <- grid_regular(penalty(),
+                             levels = 10)
+
+# tune the model 
+house_lasso_tune <- 
+  house_lasso_wf %>% 
+  tune_grid(
+    resamples = house_cv,
+    grid = penalty_grid
+    )
+
+# choose the best penalty
+best_param <- house_lasso_tune %>% 
+  select_best(metric = "rmse")
+
+# finalize workflow
+house_lasso_final_wf <- house_lasso_wf %>% 
+  finalize_workflow(best_param)
+
+# fit final model
+house_lasso_final_mod <- house_lasso_final_wf %>% 
+  fit(data = house_training)
+
+```
+
+```{r}
+# set up recipe and transformation steps and roles
+ranger_recipe <- 
+  recipe(formula = log_price ~ ., 
+         data = house_training) %>% 
+  step_date(date, 
+            features = "month") %>% 
+  # Make these evaluative variables, not included in modeling
+  update_role(all_of(c("id",
+                       "date")),
+              new_role = "evaluative")
+
+#define model
+ranger_spec <- 
+  rand_forest(mtry = 6, 
+              min_n = 10, 
+              trees = 200) %>% 
+  set_mode("regression") %>% 
+  set_engine("ranger")
+
+#create workflow
+ranger_workflow <- 
+  workflow() %>% 
+  add_recipe(ranger_recipe) %>% 
+  add_model(ranger_spec) 
+
+#fit the model
+set.seed(712) # for reproducibility - random sampling in random forest choosing number of variables
+ranger_fit <- ranger_workflow %>% 
+  fit(house_training)
+
+```
+
+```{r}
+lasso_explain <- 
+  explain_tidymodels(
+    model = house_lasso_final_mod,
+    data = house_training %>% select(-log_price), 
+    y = house_training %>%  pull(log_price),
+    label = "lasso"
+  )
+```
+
+```{r}
+# Create an explainer for the random forest model:
+rf_explain <- 
+  explain_tidymodels(
+    model = ranger_fit,
+    data = house_training %>% select(-log_price), 
+    y = house_training %>%  pull(log_price),
+    label = "rf"
+  )
+```
+
+# Random Observation #1
+
+```{r message = FALSE, warning = FALSE}
+
+# Choose an observation
+new_obs_1 <- house_testing %>% slice(3425)
+
+# Price of new_obs's house - just to know because I can't think in logs
+10^(new_obs_1$log_price)
+
+# Pulls together the data needed for the break-down plot
+pp_lasso_1 <- predict_parts(explainer = lasso_explain,
+                          new_observation = new_obs_1,
+                          type = "break_down") #default
+
+# Break-down plot
+plot(pp_lasso_1)
+
+# Table form of break-down plot data
+pp_lasso_1
+```
+
+# Random Observation #2
+
+```{r message = FALSE, warning = FALSE}
+# Choose an observation
+new_obs_2 <- house_testing %>% slice(3921)
+
+# Price of new_obs's house - just to know because I can't think in logs
+10^(new_obs_2$log_price)
+
+# Pulls together the data needed for the break-down plot
+pp_lasso_2 <- predict_parts(explainer = lasso_explain,
+                          new_observation = new_obs_1,
+                          type = "break_down") #default
+
+# Break-down plot
+plot(pp_lasso_2)
+
+# Table form of break-down plot data
+pp_lasso_2
+```
+
+# Random Observation #3
+
+```{r message = FALSE, warning = FALSE}
+# Choose an observation
+new_obs_3 <- house_testing %>% slice(3425)
+
+# Price of new_obs's house - just to know because I can't think in logs
+10^(new_obs_3$log_price)
+
+# Pulls together the data needed for the break-down plot
+pp_lasso_3 <- predict_parts(explainer = lasso_explain,
+                          new_observation = new_obs_1,
+                          type = "break_down") #default
+
+# Break-down plot
+plot(pp_lasso_3)
+
+# Table form of break-down plot data
+pp_lasso_3
+```
