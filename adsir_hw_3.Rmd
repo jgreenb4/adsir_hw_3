@@ -24,6 +24,7 @@ library(dbplyr)            # for SQL query "cheating" - part of tidyverse but ne
 library(mdsr)              # for accessing some databases - goes with Modern Data Science with R textbook
 library(RMySQL)            # for accessing MySQL databases
 library(RSQLite)           # for accessing SQLite databases
+library(lime)
 
 #mapping
 library(maps)              # for built-in maps
@@ -276,7 +277,7 @@ pp_lasso_3
 
 # SHAP
 
-# Observation 1
+## Observation 1
 
 ```{r}
 rf_shap <-predict_parts(explainer = rf_explain,
@@ -288,7 +289,7 @@ rf_shap <-predict_parts(explainer = rf_explain,
 plot(rf_shap)
 ```
 
-# Observation 2
+## Observation 2
 
 ```{r}
 rf_shap <-predict_parts(explainer = rf_explain,
@@ -300,7 +301,7 @@ rf_shap <-predict_parts(explainer = rf_explain,
 plot(rf_shap)
 ```
 
-# Observation 3
+## Observation 3
 
 ```{r}
 rf_shap <-predict_parts(explainer = rf_explain,
@@ -312,3 +313,127 @@ rf_shap <-predict_parts(explainer = rf_explain,
 plot(rf_shap)
 ```
 
+# LIME
+
+## Observation 1
+
+```{r}
+set.seed(2)
+
+# NEED these two lines of code always!
+# They make sure our explainer is defined correctly to use in the next step
+model_type.dalex_explainer <- DALEXtra::model_type.dalex_explainer
+predict_model.dalex_explainer <- DALEXtra::predict_model.dalex_explainer
+
+lime_rf_1 <- predict_surrogate(explainer = rf_explain,
+                             new_observation = new_obs_1 %>%
+                               select(-log_price), 
+                             n_features = 5,
+                             n_permutations = 1000,
+                             type = "lime")
+
+lime_rf_1 %>% 
+  select(model_r2, model_prediction, prediction) %>% 
+  distinct()
+
+
+
+plot(lime_rf_1) +
+  labs(x = "Variable")
+```
+
+## Observation 2
+
+```{r}
+set.seed(2)
+
+# NEED these two lines of code always!
+# They make sure our explainer is defined correctly to use in the next step
+model_type.dalex_explainer <- DALEXtra::model_type.dalex_explainer
+predict_model.dalex_explainer <- DALEXtra::predict_model.dalex_explainer
+
+lime_rf_2 <- predict_surrogate(explainer = rf_explain,
+                             new_observation = new_obs_2 %>%
+                               select(-log_price), 
+                             n_features = 5,
+                             n_permutations = 1000,
+                             type = "lime")
+
+lime_rf_2 %>% 
+  select(model_r2, model_prediction, prediction) %>% 
+  distinct()
+
+
+
+plot(lime_rf_2) +
+  labs(x = "Variable")
+```
+
+## Observation 3
+
+```{r}
+set.seed(2)
+
+# NEED these two lines of code always!
+# They make sure our explainer is defined correctly to use in the next step
+model_type.dalex_explainer <- DALEXtra::model_type.dalex_explainer
+predict_model.dalex_explainer <- DALEXtra::predict_model.dalex_explainer
+
+lime_rf_3 <- predict_surrogate(explainer = rf_explain,
+                             new_observation = new_obs_3 %>%
+                               select(-log_price), 
+                             n_features = 5,
+                             n_permutations = 1000,
+                             type = "lime")
+
+lime_rf_3 %>% 
+  select(model_r2, model_prediction, prediction) %>% 
+  distinct()
+
+
+
+plot(lime_rf_3) +
+  labs(x = "Variable")
+```
+
+2. Describe how you would use the interpretable machine learning tools we’ve learned (both local and global) in future machine learning projects? How does each of them help you?
+
+# SQL
+
+You will use the airlines data from the SQL database that I used in the example in the tutorial. Be sure to include the chunk to connect to the database here. And, when you are finished, disconnect. You may need to reconnect throughout as it times out after a while.
+
+
+1. Create a SQL chunk and an equivalent R code chunk that does the following: for each airport (with its name, not code), year, and month find the total number of departing flights, the distinct destinations to which they flew, the average length of the flight, the average distance of the flight, and the proportion of flights that arrived more than 20 minutes late. In the R code chunk, write this out to a dataset. (HINT: 1. start small! 2. you may want to do the R part first and use it to “cheat” into the SQL code).
+
+```{r}
+con_air <- dbConnect(RMySQL::MySQL(), 
+                     dbname = "airlines", 
+                     host = "mdsr.cdc7tgkkqd0n.us-east-1.rds.amazonaws.com", 
+                     user = "mdsr_public", 
+                     password = "ImhsmflMDSwR")
+
+
+con_air <- dbConnect_scidb("airlines")
+```
+
+```{r}
+dbListTables(con_air)
+```
+
+```{sql connection= con_air}
+SHOW TABLES;
+```
+
+```{r}
+dbListFields(con_air, "flights")
+```
+
+```{sql connection= con_air}
+DESCRIBE flights;
+```
+
+- With the dataset you wrote out, create a graph that helps illustrate the “worst” airports in terms of late arrivals. You have some freedom in how you define worst and you may want to consider some of the other variables you computed. Do some theming to make your graph look glamorous (those of you who weren’t in my intro data science class this year may want to watch Will Chase’s Glamour of Graphics talk for inspiration).
+
+- Although your graph was truly inspirational, you’ve been requested to “boil it down to a few numbers.” Some people just don’t appreciate all that effort you put in. And, you need to use the already summarized data that you already pulled in from SQL. Create a table with 6 or fewer rows and 3 or fewer columns that summarizes which airport is the “worst” in terms of late arrivals. Be careful with your calculations. You may consider using the kable, kableExtra, or gt packages to make your table look truly spectacular.
+
+2. Come up with your own interesting question that data in the airlines database can help you answer. Write a SQL query and equivalent R code chunk to extract the data you need and create an elegant graph to help answer the question. Be sure to write down the question so it is clear.
