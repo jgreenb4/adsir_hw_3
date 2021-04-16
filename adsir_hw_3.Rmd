@@ -48,10 +48,6 @@ theme_set(theme_minimal()) # Lisa's favorite theme
 
 You are going to use the King County house data and the same random forest model to predict log_price that I used in the tutorial.
 
-Tasks:
-
-Describe how you would use the interpretable machine learning tools we’ve learned (both local and global) in future machine learning projects? How does each of them help you?
-
 ```{r}
 data("house_prices")
 
