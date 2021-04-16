@@ -536,13 +536,21 @@ airports_new_query_collect %>%
   ggplot(aes(x = year, y = pct)) + geom_point() + geom_line() + labs(x = "Year", y = "Percentage of Flights Canceled") + ggtitle("Percentage of Canceled Flights by Year")
 ```
 
-
 ```{r}
-library(tidyverse)
-library(ggplot2)
-library(maps)
-library(sf)
+dbDisconnect(con_air)
 ```
+
+
+# Function Friday
+
+## geom_sf
+
+**This was my group's project, so I was not sure if I needed to do these exercises.**
+
+-Change the color scheme of the map from the default blue (one option could be viridis).
+-Add a dot (or any symbol you want) to the centroid of each state.
+-Add a layer onto the map with the counties.
+-`Change the coordinates of the map to zoom in on your favorite state.
 
 ```{r}
 states <- st_as_sf(maps::map("state", plot = FALSE, fill = TRUE))
@@ -601,12 +609,166 @@ ggplot(data = states) +
 Question 4:
 
 Example -> Washington State
+
 ```{r}
 ggplot(data = states) +
     geom_sf(aes(fill = area)) +
     coord_sf(xlim = c(-125, -115), ylim = c(45, 50), expand = FALSE)
 ```
 
+## tidytext
 
+Now you will try using tidytext on a new dataset about Russian Troll tweets.
+Read about the data
+
+These are tweets from Twitter handles that are connected to the Internet Research Agency (IRA), a Russian “troll factory.” The majority of these tweets were posted from 2015-2017, but the datasets encompass tweets from February 2012 to May 2018.
+
+Three of the main categories of troll tweet that we will be focusing on are Left Trolls, Right Trolls, and News Feed. Left Trolls usually pretend to be BLM activists, aiming to divide the democratic party (in this context, being pro-Bernie so that votes are taken away from Hillary). Right trolls imitate Trump supporters, and News Feed handles are “local news aggregators,” typically linking to legitimate news.
+
+For our upcoming analyses, some important variables are:
+
+    author (handle sending the tweet)
+    content (text of the tweet)
+    language (language of the tweet)
+    publish_date (date and time the tweet was sent)
+
+Variable documentation can be found on Github and a more detailed description of the dataset can be found in this fivethirtyeight article.
+
+Because there are 12 datasets containing 2,973,371 tweets sent by 2,848 Twitter handles in total, we will be using three of these datasets (one from a Right troll, one from a Left troll, and one from a News Feed account).
+
+
+
+1. Read in Troll Tweets Dataset - this takes a while. You can cache it so you don’t need to read it in again each time you knit. Be sure to remove the eval=FALSE!!!!
+
+```{r}
+troll_tweets <- read_csv("https://raw.githubusercontent.com/fivethirtyeight/russian-troll-tweets/master/IRAhandle_tweets_12.csv")
 ```
 
+
+2. Basic Data Cleaning and Exploration
+
+Remove rows where the tweet was in a language other than English
+
+```{r}
+troll_tweets_cleaned <- troll_tweets %>% 
+  filter(language == "English")
+```
+
+Report the dimensions of the dataset
+```{r}
+dim(troll_tweets_cleaned)
+```
+
+Create two or three basic exploratory plots of the data (ex. plot of the different locations from which tweets were posted, plot of the account category of a tweet)
+
+```{r}
+troll_tweets_cleaned %>% 
+  group_by(account_category) %>% 
+  mutate(total = n()) %>% 
+  ggplot(aes(x = account_category, y = total)) +
+  coord_flip() +
+  geom_bar(stat = "identity", fill = "red") +
+  labs(y = "Total Number of Tweets", x = "Category of Account") +
+  ggtitle("Relationship Between Account Category and Tweet Frequency within Dataset")
+```
+
+```{r}
+troll_tweets_cleaned %>% 
+  mutate(publish_month = substr(publish_date, 1, 2), publish_month = gsub("/","", publish_month), publish_month = factor(publish_month, levels = c("12", "11", "10", "9", "8", "7", "6", "5", "4", "3", "2", "1"))) %>% 
+  group_by(publish_month) %>% 
+  mutate(total = n()) %>% 
+  ggplot(aes(x = publish_month, y = total)) +
+  geom_bar(stat ="identity", color = "orange") +
+  coord_flip() + 
+  labs(x = "Month of Tweet Publishing", y = "Total Count of Tweets") +
+  ggtitle("Relationship Between Month of Year and Tweet Frequency in Dataset")
+```
+
+3. Unnest Tokens
+
+```{r}
+troll_tweets_untoken <- troll_tweets_cleaned %>% 
+  unnest_tokens(word, content)
+
+troll_tweets_untoken
+```
+
+4. Remove stopwords. Be sure to remove the eval=FALSE!!!!
+
+```{r}
+#get rid of stopwords (the, and, etc.)
+troll_tweets_cleaned <- troll_tweets_untoken %>%
+  anti_join(stop_words)
+```
+
+4 (Cont'd). Take a look at the troll_tweets_cleaned dataset. Are there any other words/letters/numbers that we want to eliminate that weren’t taken care of by stop_words? Be sure to remove the eval=FALSE!!!!
+
+```{r}
+#get rid of http, https, t.co, rt, amp, single number digits, and singular letters
+troll_tweets_cleaned <- troll_tweets_cleaned %>%
+  filter(!word %in% c("https", "t.co", "lldda0raa7")) # you can use %in% for a list of words
+```
+
+
+5. Look at a subset of the tweets to see how often the top words appear.
+
+```{r}
+troll_tweets_small <- troll_tweets_cleaned %>%
+  count(word) %>%
+  slice_max(order_by = n, n = 50) # 50 most occurring words
+
+# visualize the number of times the 50 top words appear
+ggplot(troll_tweets_small, 
+       aes(y = fct_reorder(word,n), x = n)) +
+  geom_col()
+```
+
+
+Sentiment Analysis
+
+a. Get the sentiments using the “bing” parameter (which classifies words into “positive” or “negative”).
+
+```{r}
+# look at sentiment
+sentiments <- get_sentiments("bing")
+
+# assign a sentiment to each word that has one associated
+troll_tweets_sentiment <- troll_tweets_cleaned %>%
+  inner_join(sentiments, by = "word")
+```
+
+b. Report how many positive and negative words there are in the dataset. Are there more positive or negative words, and why do you think this might be?
+
+```{r}
+# count the sentiments
+troll_tweets_sentiment %>% 
+  group_by(sentiment) %>% 
+  summarize(count = n())
+```
+
+7. Using the troll_tweets_small dataset, make a wordcloud:
+
+  a. That is sized by the number of times that a word appears in the tweets
+  b. That is colored by sentiment (positive or negative)
+  
+```{r}
+# make a wordcloud where the size of the word is based on the number of times the word appears across the tweets
+troll_tweets_small %>%
+  with(wordcloud(word, n, max.words = 800))
+
+# make a wordcloud colored by sentiment
+
+troll_tweets_sentiment %>%
+  count(word, sentiment, sort = TRUE) %>%
+  acast(word ~ sentiment, value.var = "n", fill = 0) %>%
+  comparison.cloud(colors = c("red","blue"),
+                   max.words = 100)
+```
+  
+# Projects
+
+At the end of every season, popular EA Sports video game FIFA releases its TOTS Awards, or Teams of the Season, for each league. These teams are generally supposed to be reflective of who the best players at each of their positions were in the league, but due to the profitability motivations of EA Sports (people pay real money for the chance to acquire these "special players" in the video game, so this could be motivation for the company to favor more popular players/players from teams with greater popularity in their selections). My group is going to be working with soccer data from a variety of sources (Football Reference, FIFA data, attendance/jersey sales) to both derive the primary components of being selected to a FIFA team of the season for each of the top 5 leagues, and have predictive power at estimating who should be on the team of the season for future seasons. 
+
+# "Undoing Bias"
+
+I think that this tweet from Sara Hooker relates quite strongly to the sentiments presented in the Coded Bias film. This "debate" that she found herself in is an absolutely imperative one because it relates to accountability and admittance of control over whether an algorithim will ultimately exhibit bias. As a data scientist, one has a certain ethical and statistical validity-based obligation to ensure that their models minimize potential biases throughout each step in the modeling process. One example of such biases that Hooker references in her tweet, which has been frequently discussed throughout this module, has been the necessity for accurate demographic representation within a training dataset- this is an example of an issue that has both ethical and statistical-accuracy implications that feed into each other, because if a certain demographic for a characteristic within the population is under-represented in the dataset and someone tries to apply an algorithm to people fitting that description, it could have real-world consequences due to these inaccuracies.
