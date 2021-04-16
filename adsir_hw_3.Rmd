@@ -6,7 +6,7 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
 ```
 
 ```{r}
@@ -26,6 +26,8 @@ library(RMySQL)            # for accessing MySQL databases
 library(RSQLite)           # for accessing SQLite databases
 library(lime)
 library(plotly)
+library(formattable)
+library(kableExtra)
 
 #mapping
 library(maps)              # for built-in maps
@@ -401,11 +403,11 @@ plot(lime_rf_3) +
   labs(x = "Variable")
 ```
 
-###Construct a LIME graph (follow my code carefully). How close is each original prediction to the prediction from the local model? Interpret the result. You can also try using fewer or more variables in the local model than I used in the example.
+### Construct a LIME graph (follow my code carefully). How close is each original prediction to the prediction from the local model? Interpret the result. You can also try using fewer or more variables in the local model than I used in the example.
 
 **Overall, each of the original predictions is fairly close to the predictions from the local model. Based on the LIME graphs, it seems that there is a breaking point somewhere on the spectrum of square feet of living where the variable goes from carrying a negative weight to the final prediction to possessing a positive one (somewhere between 1930 and 2560).**
 
-###2. Describe how you would use the interpretable machine learning tools we’ve learned (both local and global) in future machine learning projects? How does each of them help you?
+### 2. Describe how you would use the interpretable machine learning tools we’ve learned (both local and global) in future machine learning projects? How does each of them help you?
 
 **I would use the interpretable machine learning tools we've learned (both local and global) in future machine learning projects to develop a more clear understanding of the modeling process and how my model is ultimately making predictions. I think these could be particularly effective for diagnosing the reasoning behind possible bias in a model's predictive accuracy or why it could be missing specific observations by so much, to further improve its thoroughness.**
 
@@ -443,19 +445,6 @@ dbListFields(con_air, "flights")
 ```{sql connection= con_air}
 DESCRIBE flights;
 ```
-
-```{sql connection= con_air}
-small_query <- 
-  tbl(con_air,
-      sql("
-          SELECT * 
-          FROM flights 
-          LIMIT 20
-          ")
-      )
-small_query
-```
-
 
 Create a SQL chunk and an equivalent R code chunk that does the following: for each airport (with its name, not code), year, and month find the total number of departing flights, the distinct destinations to which they flew, the average length of the flight, the average distance of the flight, and the proportion of flights that arrived more than 20 minutes late. In the R code chunk, write this out to a dataset. (HINT: 1. start small! 2. you may want to do the R part first and use it to “cheat” into the SQL code).
  
@@ -513,11 +502,28 @@ ggplotly(freq_dist_plot)
 - Although your graph was truly inspirational, you’ve been requested to “boil it down to a few numbers.” Some people just don’t appreciate all that effort you put in. And, you need to use the already summarized data that you already pulled in from SQL. Create a table with 6 or fewer rows and 3 or fewer columns that summarizes which airport is the “worst” in terms of late arrivals. Be careful with your calculations. You may consider using the kable, kableExtra, or gt packages to make your table look truly spectacular.
 
 ```{r}
-airports_query_collect %>%
+# creates table w/ aggregated training accuracies
+modeling_accuracy_table <- formattable(results_pitches[1:4, 1:2], color = "Black", list( `Player` = formatter("span", style = ~ style(color
+= "#2F241D",font.weight = "bold"))))
+kable(modeling_accuracy_table) %>%
+kableExtra::row_spec(0, color = "#FFC425", background = "#2F241D") %>%
+kableExtra::kable_styling(full_width = FALSE) %>%
+kableExtra::add_header_above(c("Final Model Training Accuracies" = 2), color = "#FFC425", background = "#2F241D")
+```
+
+```{r}
+query_wrangled <- airports_query_collect %>%
   mutate(month_category = month, month_category = replace(month_category, month_category %in% c(1,2), "January & February"), month_category = replace(month_category, month_category %in% c(3,4), "March & April"), month_category = replace(month_category, month_category %in% c(5,6), "May & June"), month_category = replace(month_category, month_category %in% c(7,8), "July & August"), month_category = replace(month_category, month_category %in% c(9,10), "September & October"), month_category = replace(month_category, month_category %in% c(11,12), "November & December"), month_category = factor(month_category, levels = c("January & February", "March & April","May & June", "July & August", "September & October", "November & December"))) %>% 
   group_by(month_category) %>% 
   rename(`Month Grouping` = month_category) %>% 
   summarize(`Proportion of Flights Delayed Over 20 Minutes` = mean(prop_late_over20))
+
+query_table <- formattable(query_wrangled[1:6, 1:2], color = "Black", list( `Player` = formatter("span", style = ~ style(color
+= "#2F241D",font.weight = "bold"))))
+kable(query_table) %>%
+kableExtra::row_spec(0, color = "#FFC425", background = "#2F241D") %>%
+kableExtra::kable_styling(full_width = FALSE) %>%
+kableExtra::add_header_above(c("Final Model Training Accuracies" = 2), color = "#FFC425", background = "#2F241D")
 ```
 
 
