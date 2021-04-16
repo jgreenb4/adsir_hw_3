@@ -498,16 +498,6 @@ ggplotly(freq_dist_plot)
 - Although your graph was truly inspirational, you’ve been requested to “boil it down to a few numbers.” Some people just don’t appreciate all that effort you put in. And, you need to use the already summarized data that you already pulled in from SQL. Create a table with 6 or fewer rows and 3 or fewer columns that summarizes which airport is the “worst” in terms of late arrivals. Be careful with your calculations. You may consider using the kable, kableExtra, or gt packages to make your table look truly spectacular.
 
 ```{r}
-# creates table w/ aggregated training accuracies
-modeling_accuracy_table <- formattable(results_pitches[1:4, 1:2], color = "Black", list( `Player` = formatter("span", style = ~ style(color
-= "#2F241D",font.weight = "bold"))))
-kable(modeling_accuracy_table) %>%
-kableExtra::row_spec(0, color = "#FFC425", background = "#2F241D") %>%
-kableExtra::kable_styling(full_width = FALSE) %>%
-kableExtra::add_header_above(c("Final Model Training Accuracies" = 2), color = "#FFC425", background = "#2F241D")
-```
-
-```{r}
 query_wrangled <- airports_query_collect %>%
   mutate(month_category = month, month_category = replace(month_category, month_category %in% c(1,2), "January & February"), month_category = replace(month_category, month_category %in% c(3,4), "March & April"), month_category = replace(month_category, month_category %in% c(5,6), "May & June"), month_category = replace(month_category, month_category %in% c(7,8), "July & August"), month_category = replace(month_category, month_category %in% c(9,10), "September & October"), month_category = replace(month_category, month_category %in% c(11,12), "November & December"), month_category = factor(month_category, levels = c("January & February", "March & April","May & June", "July & August", "September & October", "November & December"))) %>% 
   group_by(month_category) %>% 
