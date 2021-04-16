@@ -48,13 +48,7 @@ You are going to use the King County house data and the same random forest model
 
 Tasks:
 
-Choose 3 new observations and do the following for each observation:
--Construct a break-down plot using the default ordering. Interpret the resulting graph. Which variables contribute most to each observation’s prediction?
-    
-    Construct a SHAP graph and interpret it. Does it tell a similar story to the break-down plot?
-    Construct a LIME graph (follow my code carefully). How close is each original prediction to the prediction from the local model? Interpret the result. You can also try using fewer or more variables in the local model than I used in the example.
-
-    Describe how you would use the interpretable machine learning tools we’ve learned (both local and global) in future machine learning projects? How does each of them help you?
+Describe how you would use the interpretable machine learning tools we’ve learned (both local and global) in future machine learning projects? How does each of them help you?
 
 ```{r}
 data("house_prices")
@@ -234,6 +228,8 @@ plot(pp_lasso_1)
 pp_lasso_1
 ```
 
+**The variables that contribute the most to this observation's ultimate prediction are its grade, the year in which it was built, and the square feet of living it possesses.**
+
 ## Random Observation #2
 
 ```{r message = FALSE, warning = FALSE}
@@ -255,6 +251,8 @@ plot(pp_lasso_2)
 pp_lasso_2
 ```
 
+**The variables that contribute the most to this observation's ultimate prediction are its grade, the year in which it was built, and the square feet of living it possesses.**
+
 ## Random Observation #3
 
 ```{r message = FALSE, warning = FALSE}
@@ -275,6 +273,8 @@ plot(pp_lasso_3)
 # Table form of break-down plot data
 pp_lasso_3
 ```
+
+**The variables that contribute the most to this observation's ultimate prediction are also its grade, the year in which it was built, and the square feet of living it possesses. Considering that this has been consistent for each of my randomly selected observations, it would seem as though these three variables are fairly crucial in arriving at the ultiamte prediction.**
 
 # SHAP
 
@@ -313,6 +313,10 @@ rf_shap <-predict_parts(explainer = rf_explain,
 
 plot(rf_shap)
 ```
+
+### Construct a SHAP graph and interpret it. Does it tell a similar story to the break-down plot?
+
+**Each of the SHAPs above tells a somewhat similar story to the PP plots above, in that they exhibit the importance of square feet of living and grade, but they also show that the geographic location of the home (longitude and lattitude), which could serve as somehwatof a proxy for neighborhood location, is also an important determinant. Meanwhile, these SHAP plots seem to undermine the importance of the year when the house was built, a variable that seemed quite important in the PP plots.**
 
 # LIME
 
@@ -397,7 +401,13 @@ plot(lime_rf_3) +
   labs(x = "Variable")
 ```
 
-2. Describe how you would use the interpretable machine learning tools we’ve learned (both local and global) in future machine learning projects? How does each of them help you?
+###Construct a LIME graph (follow my code carefully). How close is each original prediction to the prediction from the local model? Interpret the result. You can also try using fewer or more variables in the local model than I used in the example.
+
+**Overall, each of the original predictions is fairly close to the predictions from the local model. Based on the LIME graphs, it seems that there is a breaking point somewhere on the spectrum of square feet of living where the variable goes from carrying a negative weight to the final prediction to possessing a positive one (somewhere between 1930 and 2560).**
+
+###2. Describe how you would use the interpretable machine learning tools we’ve learned (both local and global) in future machine learning projects? How does each of them help you?
+
+**I would use the interpretable machine learning tools we've learned (both local and global) in future machine learning projects to develop a more clear understanding of the modeling process and how my model is ultimately making predictions. I think these could be particularly effective for diagnosing the reasoning behind possible bias in a model's predictive accuracy or why it could be missing specific observations by so much, to further improve its thoroughness.**
 
 # SQL
 
@@ -512,6 +522,8 @@ airports_query_collect %>%
 
 
 2. Come up with your own interesting question that data in the airlines database can help you answer. Write a SQL query and equivalent R code chunk to extract the data you need and create an elegant graph to help answer the question. Be sure to write down the question so it is clear.
+
+## **Are there certain years in which there are more flights canceled than others?**
 
 ```{r}
 airports_new_query <- 
@@ -724,7 +736,7 @@ ggplot(troll_tweets_small,
 ```
 
 
-Sentiment Analysis
+### Sentiment Analysis
 
 a. Get the sentiments using the “bing” parameter (which classifies words into “positive” or “negative”).
 
@@ -738,6 +750,8 @@ troll_tweets_sentiment <- troll_tweets_cleaned %>%
 ```
 
 b. Report how many positive and negative words there are in the dataset. Are there more positive or negative words, and why do you think this might be?
+
+**There are far more negative words in the dataset than positive words. This could be due to the fact that the motivation for creating these accounts that will post "troll tweets" could be to sabotage a political opponent in the public light, which would explain the large proportion of words with negative sentiments.**
 
 ```{r}
 # count the sentiments
@@ -764,7 +778,11 @@ troll_tweets_sentiment %>%
   comparison.cloud(colors = c("red","blue"),
                    max.words = 100)
 ```
-  
+
+Are there any words whose categorization as “positive” or “negative” surprised you?
+
+**I was not really surprised by any of the sentiments. Perhaps, a word like "conservative" is surprising in that it lies on one end of the spectrum (negative), instead of being more neutral.**
+
 # Projects
 
 At the end of every season, popular EA Sports video game FIFA releases its TOTS Awards, or Teams of the Season, for each league. These teams are generally supposed to be reflective of who the best players at each of their positions were in the league, but due to the profitability motivations of EA Sports (people pay real money for the chance to acquire these "special players" in the video game, so this could be motivation for the company to favor more popular players/players from teams with greater popularity in their selections). My group is going to be working with soccer data from a variety of sources (Football Reference, FIFA data, attendance/jersey sales) to both derive the primary components of being selected to a FIFA team of the season for each of the top 5 leagues, and have predictive power at estimating who should be on the team of the season for future seasons. 
