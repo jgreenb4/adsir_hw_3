@@ -44,6 +44,9 @@ library(stopwords)
 theme_set(theme_minimal()) # Lisa's favorite theme
 ```
 
+# Github Repository:
+https://github.com/jgreenb4/adsir_hw_3
+
 # Local Interpretable Machine Learning
 
 You are going to use the King County house data and the same random forest model to predict log_price that I used in the tutorial.
