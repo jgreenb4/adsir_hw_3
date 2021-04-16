@@ -25,6 +25,7 @@ library(mdsr)              # for accessing some databases - goes with Modern Dat
 library(RMySQL)            # for accessing MySQL databases
 library(RSQLite)           # for accessing SQLite databases
 library(lime)
+library(plotly)
 
 #mapping
 library(maps)              # for built-in maps
@@ -405,6 +406,7 @@ You will use the airlines data from the SQL database that I used in the example 
 
 1. Create a SQL chunk and an equivalent R code chunk that does the following: for each airport (with its name, not code), year, and month find the total number of departing flights, the distinct destinations to which they flew, the average length of the flight, the average distance of the flight, and the proportion of flights that arrived more than 20 minutes late. In the R code chunk, write this out to a dataset. (HINT: 1. start small! 2. you may want to do the R part first and use it to “cheat” into the SQL code).
 
+
 ```{r}
 con_air <- dbConnect(RMySQL::MySQL(), 
                      dbname = "airlines", 
@@ -432,8 +434,179 @@ dbListFields(con_air, "flights")
 DESCRIBE flights;
 ```
 
+```{sql connection= con_air}
+small_query <- 
+  tbl(con_air,
+      sql("
+          SELECT * 
+          FROM flights 
+          LIMIT 20
+          ")
+      )
+small_query
+```
+
+
+Create a SQL chunk and an equivalent R code chunk that does the following: for each airport (with its name, not code), year, and month find the total number of departing flights, the distinct destinations to which they flew, the average length of the flight, the average distance of the flight, and the proportion of flights that arrived more than 20 minutes late. In the R code chunk, write this out to a dataset. (HINT: 1. start small! 2. you may want to do the R part first and use it to “cheat” into the SQL code).
+ 
+ 
+```{r}
+airports_query <- 
+tbl(con_air,sql("select `origin`, `name`, `month`, `total_departures`, `distinct_dest`, `avg_dist`, `prop_late_over20`
+from (select `LHS`.`origin`, `LHS`.`month`, `LHS`.`total_departures`, `LHS`.`avg_dist`, `LHS`.`prop_late_over20`, `LHS`.`distinct_dest`, `RHS`.`name`, `RHS`.`lat`, `RHS`.`lon`, `RHS`.`alt`, `RHS`.`tz`, `RHS`.`dst`, `RHS`.`city`, `RHS`.`country`
+FROM (select `origin`, `month`, count(*) as `total_departures`, avg(`distance`) as `avg_dist`, avg(`arr_delay` > 20) as `prop_late_over20`, count(distinct dest) as `distinct_dest`
+FROM `flights`
+WHERE (`year` = 2017)
+GROUP BY `origin`, `month`) `LHS`
+INNER JOIN `airports` AS `RHS`
+ON (`LHS`.`origin` = `RHS`.`faa`)
+)`dbplyr_027`"))
+
+airports_query
+```
+ 
+```{r}
+show_query(airports_query)
+```
+
+
+```{r}
+airports_query_collect <- collect(airports_query)
+```
+
+ 
+
 - With the dataset you wrote out, create a graph that helps illustrate the “worst” airports in terms of late arrivals. You have some freedom in how you define worst and you may want to consider some of the other variables you computed. Do some theming to make your graph look glamorous (those of you who weren’t in my intro data science class this year may want to watch Will Chase’s Glamour of Graphics talk for inspiration).
+
+```{r}
+airports_query_collect_final <- airports_query_collect %>% 
+  mutate(month = as.factor(month)) %>% 
+  group_by(name) %>% 
+  filter(total_departures >= 20) %>% 
+  summarize(mean_proportion = mean(prop_late_over20), mean_dist = mean(avg_dist))
+```
+
+```{r}
+freq_dist_plot <- ggplot(airports_query_collect_final, aes(x = mean_proportion,
+             y = mean_dist, color = name)) +
+  geom_point() +
+  scale_x_continuous(expand = c(0,0), 
+                     labels = scales::percent) + 
+  xlab("Proportion of Late Flights (20 + Minutes)") +
+  ylab("Average Distance Travelled (Miles)") +
+  theme(legend.position = "none") +
+  ggtitle("Relationship Between Distance Traveled and Proportion of Flights 20+ Minutes Late ")
+ggplotly(freq_dist_plot)
+```
+
 
 - Although your graph was truly inspirational, you’ve been requested to “boil it down to a few numbers.” Some people just don’t appreciate all that effort you put in. And, you need to use the already summarized data that you already pulled in from SQL. Create a table with 6 or fewer rows and 3 or fewer columns that summarizes which airport is the “worst” in terms of late arrivals. Be careful with your calculations. You may consider using the kable, kableExtra, or gt packages to make your table look truly spectacular.
 
+```{r}
+airports_query_collect %>%
+  mutate(month_category = month, month_category = replace(month_category, month_category %in% c(1,2), "January & February"), month_category = replace(month_category, month_category %in% c(3,4), "March & April"), month_category = replace(month_category, month_category %in% c(5,6), "May & June"), month_category = replace(month_category, month_category %in% c(7,8), "July & August"), month_category = replace(month_category, month_category %in% c(9,10), "September & October"), month_category = replace(month_category, month_category %in% c(11,12), "November & December"), month_category = factor(month_category, levels = c("January & February", "March & April","May & June", "July & August", "September & October", "November & December"))) %>% 
+  group_by(month_category) %>% 
+  rename(`Month Grouping` = month_category) %>% 
+  summarize(`Proportion of Flights Delayed Over 20 Minutes` = mean(prop_late_over20))
+```
+
+
 2. Come up with your own interesting question that data in the airlines database can help you answer. Write a SQL query and equivalent R code chunk to extract the data you need and create an elegant graph to help answer the question. Be sure to write down the question so it is clear.
+
+```{r}
+airports_new_query <- 
+tbl(con_air,sql("select `origin`, `name`, `month`, `total_departures`, `avg_dist`, `total_cancellations`, `year`
+from (select `LHS`.`origin`, `LHS`.`month`, `LHS`.`total_departures`, `LHS`.`avg_dist`, `LHS`.`year`, `LHS`.`total_cancellations`, `RHS`.`name`, `RHS`.`lat`, `RHS`.`lon`, `RHS`.`alt`, `RHS`.`tz`, `RHS`.`dst`, `RHS`.`city`, `RHS`.`country`
+FROM (select `origin`, `month`, `year`, count(*) as `total_departures`, avg(`distance`) as `avg_dist`,  sum(`cancelled`) as total_cancellations
+FROM `flights`
+GROUP BY `origin`, `month`) `LHS`
+INNER JOIN `airports` AS `RHS`
+ON (`LHS`.`origin` = `RHS`.`faa`)
+)`dbplyr_027`"))
+```
+
+```{r}
+airports_new_query_collect <- collect(airports_new_query)
+```
+
+```{r}
+airports_new_query_collect %>% 
+  group_by(year) %>% 
+  summarize(total_cancellations = sum(total_cancellations), total_departures = sum(total_departures), pct = 100* total_cancellations/total_departures) %>% 
+  ggplot(aes(x = year, y = pct)) + geom_point() + geom_line() + labs(x = "Year", y = "Percentage of Flights Canceled") + ggtitle("Percentage of Canceled Flights by Year")
+```
+
+
+```{r}
+library(tidyverse)
+library(ggplot2)
+library(maps)
+library(sf)
+```
+
+```{r}
+states <- st_as_sf(maps::map("state", plot = FALSE, fill = TRUE))
+head(states)
+```
+
+```{r}
+ggplot(data = states) +
+    geom_sf(fill = NA) +
+    coord_sf(xlim = c(-127, -63), ylim = c(24, 51), expand = FALSE)
+
+states <- states %>%
+  mutate(area = as.numeric(st_area(states)))
+
+ggplot(data = states) +
+    geom_sf(aes(fill = area)) +
+    coord_sf(xlim = c(-127, -63), ylim = c(24, 51), expand = FALSE)
+```
+
+Question 1:
+
+```{r}
+ggplot(data = states) +
+    geom_sf(aes(fill = area)) +
+    scale_fill_viridis_c(trans = "sqrt", alpha = .4) +
+    coord_sf(xlim = c(-127, -63), ylim = c(24, 51), expand = FALSE)
+```
+
+Question 2:
+
+```{r}
+ggplot(data = states) +
+    geom_sf(aes(fill = area)) +
+    stat_sf_coordinates() +
+    coord_sf(xlim = c(-127, -63), ylim = c(24, 51), expand = FALSE)
+```
+
+Question 3:
+
+```{r}
+counties <- st_as_sf(maps::map("county", plot = FALSE, fill = TRUE))
+head(counties)
+
+ggplot(data = states) +
+    geom_sf(fill = NA) +
+    geom_sf(data = counties)
+
+counties <- counties %>%
+  mutate(area = as.numeric(st_area(counties)))
+
+ggplot(data = states) +
+    geom_sf(data = counties, aes(fill = area)) +
+    coord_sf(xlim = c(-127, -63), ylim = c(24, 51), expand = FALSE)
+```
+
+Question 4:
+
+Example -> Washington State
+```{r}
+ggplot(data = states) +
+    geom_sf(aes(fill = area)) +
+    coord_sf(xlim = c(-125, -115), ylim = c(45, 50), expand = FALSE)
+```
+
+
+```
+
